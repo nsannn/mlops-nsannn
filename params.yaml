@@ -6,7 +6,7 @@ train:
   hf_model: google/bert_uncased_L-4_H-256_A-4
   hf_revision: 387825ce42dbb39b87911cdf8e383ee3b25184f8
   num_labels: 6
-  learning_rate: 0.0001
+  learning_rate: 0.0003
   epochs: 2
   batch_size: 32
   max_length: 32
