@@ -1,6 +1,6 @@
-# Tweet Emotion Detection — Requirements v1.0
+# Tweet Emotion Detection — Requirements v1.1
 
-Date: 2026-10-21 | Author: Nojus Sandovs
+Date: 2026-10-21 | Author: Nojus Sandovas
 
 ## 1.1 Problem description
 Create a API which can help social-media support team identify tweets and the emotions they encourage. 6 emotions will be tracked and identified (sadness, joy, love, anger, fear, surprise), build MLOps platform around it. Target: accuracy ≥ 0.85 and macro F1 ≥ 0.75 on held-out tweets,
@@ -34,3 +34,19 @@ with every experiment reproducible from Git + DVC + MLflow.
 | NFR-05 | Performance | Single-tweet inference latency (U2)           | p95 ≤ 50 ms on CPU               |
 | NFR-06 | Size        | Saved model weights                           | ≤ 60 MB                          |
 | NFR-07 | Security    | Secrets committed to Git                      | 0                                |
+
+## 3.1 Experiment tracking and reproducibility NFR (v1.1)
+
+| ID     | Category        | Requirement                                                              | KPI |
+|--------|-----------------|--------------------------------------------------------------------------|-----|
+| NFR-08 | Reproducibility | Any historical run is re-created by `python reproduce.py <run_id>`       | ≤ 2 min (no data download), Δaccuracy ≤ 0.005 |
+| NFR-09 | Traceability    | Every run has an MLflow run ID plus `git_commit` and data-md5 tags; every logged model has a `model_id` | 100 % of runs |
+| NFR-10 | Data version    | Training data version pinned by DVC (`dvc.lock` md5 = the run's `dvc_raw_md5`) | 100 % of runs |
+
+
+## 7. Change history
+
+| Version | Date       | Author      | Changes |
+|---------|------------|-------------|---------|
+| 1.0     | 2026-10-21 |Nojus Sandovas | Initial document: problem, FR-01..04, NFR-01..07 |
+| 1.1     | 2026-10-21 | Nojus Sandovas | MLflow + DVC pipeline, reproducibility NFR-08..10 | |
