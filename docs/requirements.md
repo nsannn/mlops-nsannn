@@ -1,4 +1,4 @@
-# Tweet Emotion Detection — Requirements v1.1
+# Tweet Emotion Detection — Requirements v1.2
 
 Date: 2026-10-21 | Author: Nojus Sandovas
 
