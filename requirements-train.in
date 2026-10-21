@@ -1,0 +1,9 @@
+# requirements-train.in  (the image: no dvc, no datasets)
+--extra-index-url https://download.pytorch.org/whl/cpu
+mlflow==3.15.2
+torch
+transformers
+scikit-learn
+pandas
+pyarrow
+pyyaml
