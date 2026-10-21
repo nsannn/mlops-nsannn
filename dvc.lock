@@ -1,0 +1,95 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python src/prepare_data.py
+    deps:
+    - path: data/raw/dataset.parquet
+      hash: md5
+      md5: 67d7a2b593b1daf928e83026ef9e1a14
+      size: 609724
+    - path: src/prepare_data.py
+      hash: md5
+      md5: 65b3c2a7c53ca25bf3e54b01aa542bcb
+      size: 811
+    params:
+      params.yaml:
+        prepare.seed: 42
+        prepare.test_size: 0.2
+    outs:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: 5496d41789e1513360d671ee6a9528d5
+      size: 129830
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: ccdeb2d6103bbaf47e535ff119f19a62
+      size: 498272
+  train:
+    cmd: python src/train.py
+    deps:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: 5496d41789e1513360d671ee6a9528d5
+      size: 129830
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: ccdeb2d6103bbaf47e535ff119f19a62
+      size: 498272
+    - path: src/model_utils.py
+      hash: md5
+      md5: b881a2b29f29d541a8da881b643ddfd5
+      size: 1007
+    - path: src/train.py
+      hash: md5
+      md5: 9659549b4d169669ee89fb5e5b50968c
+      size: 5141
+    params:
+      params.yaml:
+        train:
+          hf_model: google/bert_uncased_L-4_H-256_A-4
+          hf_revision: 387825ce42dbb39b87911cdf8e383ee3b25184f8
+          num_labels: 6
+          learning_rate: 0.0001
+          epochs: 2
+          batch_size: 32
+          max_length: 32
+          random_seed: 42
+    outs:
+    - path: models/model
+      hash: md5
+      md5: 5c5ce5047cc5cb463eec028a6a786b6b.dir
+      size: 45409741
+      nfiles: 4
+    - path: models/run_id.txt
+      hash: md5
+      md5: 92bafb0afffb9c521edc9fcdcfad9897
+      size: 33
+  evaluate:
+    cmd: python src/evaluate.py
+    deps:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: 5496d41789e1513360d671ee6a9528d5
+      size: 129830
+    - path: models/model
+      hash: md5
+      md5: 5c5ce5047cc5cb463eec028a6a786b6b.dir
+      size: 45409741
+      nfiles: 4
+    - path: models/run_id.txt
+      hash: md5
+      md5: 92bafb0afffb9c521edc9fcdcfad9897
+      size: 33
+    - path: src/evaluate.py
+      hash: md5
+      md5: feac7f55879854928c969a88c341866a
+      size: 1750
+    - path: src/model_utils.py
+      hash: md5
+      md5: b881a2b29f29d541a8da881b643ddfd5
+      size: 1007
+    outs:
+    - path: metrics.json
+      hash: md5
+      md5: fc99ec75d5ec2af5bb318313dca57f76
+      size: 119
