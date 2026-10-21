@@ -49,20 +49,20 @@ stages:
           hf_model: google/bert_uncased_L-4_H-256_A-4
           hf_revision: 387825ce42dbb39b87911cdf8e383ee3b25184f8
           num_labels: 6
-          learning_rate: 0.0003
+          learning_rate: 0.0001
           epochs: 2
           batch_size: 32
-          max_length: 32
+          max_length: 24
           random_seed: 42
     outs:
     - path: models/model
       hash: md5
-      md5: 287301b2e785330d036d8108bb169766.dir
+      md5: ab9e5030b1a6c7b922888b3cb2487942.dir
       size: 45409741
       nfiles: 4
     - path: models/run_id.txt
       hash: md5
-      md5: 7141e9922e15fbf7170a8c43956b3db0
+      md5: 0b97621d860e26a8b0fc8e93abd5d1b9
       size: 33
   evaluate:
     cmd: python src/evaluate.py
@@ -73,12 +73,12 @@ stages:
       size: 129830
     - path: models/model
       hash: md5
-      md5: 287301b2e785330d036d8108bb169766.dir
+      md5: ab9e5030b1a6c7b922888b3cb2487942.dir
       size: 45409741
       nfiles: 4
     - path: models/run_id.txt
       hash: md5
-      md5: 7141e9922e15fbf7170a8c43956b3db0
+      md5: 0b97621d860e26a8b0fc8e93abd5d1b9
       size: 33
     - path: src/evaluate.py
       hash: md5
@@ -91,5 +91,5 @@ stages:
     outs:
     - path: metrics.json
       hash: md5
-      md5: 358d9165c2ecab78ae6191f71d98adf4
-      size: 119
+      md5: 165ae21eb7b24bb661ba0f74823baaa2
+      size: 118
