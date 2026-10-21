@@ -1,0 +1,15 @@
+# .dockerignore
+.git
+.venv
+.dvc/cache
+.dvc/tmp
+.env
+basic_auth.ini
+mlruns
+mlartifacts
+*.db
+__pycache__
+models/
+data/raw/*.parquet
+docs/
+k8s/
