@@ -43,6 +43,13 @@ with every experiment reproducible from Git + DVC + MLflow.
 | NFR-09 | Traceability    | Every run has an MLflow run ID plus `git_commit` and data-md5 tags; every logged model has a `model_id` | 100 % of runs |
 | NFR-10 | Data version    | Training data version pinned by DVC (`dvc.lock` md5 = the run's `dvc_raw_md5`) | 100 % of runs |
 
+### 3.2 Containerisation (v1.2)
+| ID | Category | Requirement | KPI | Measured | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| NFR-11 | Size | Training image size (CPU-only torch dominates) | ≤ 2 200 MB | 2 070 MB | `image-size.md` |
+| NFR-12 | Security | CRITICAL CVEs in the published image | 0 | 46 | `security-scan.md` |
+| NFR-13 | Security | Container runtime user | UID ≠ 0 | UID 1000 | `docker run --rm ghcr.io/nsannn/mlops-nsannn/train:sha-af2c8df id -u` |
+| NFR-14 | Traceability | Published image tags | 100 % `sha-<commit>`, never `latest` | `sha-af2c8df` | GHCR page |
 
 ## 7. Change history
 
@@ -50,3 +57,4 @@ with every experiment reproducible from Git + DVC + MLflow.
 |---------|------------|-------------|---------|
 | 1.0     | 2026-10-21 |Nojus Sandovas | Initial document: problem, FR-01..04, NFR-01..07 |
 | 1.1     | 2026-10-21 | Nojus Sandovas | MLflow + DVC pipeline, reproducibility NFR-08..10 | |
+| 1.2     | 2026-10-21 | Nojus Sandovas | Training image on GHCR: containerisation NFR-11..14 with measured values |
