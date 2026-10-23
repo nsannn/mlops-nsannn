@@ -47,7 +47,7 @@ with every experiment reproducible from Git + DVC + MLflow.
 | ID | Category | Requirement | KPI | Measured | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | NFR-11 | Size | Training image size (CPU-only torch dominates) | ≤ 2 200 MB | 2 070 MB | `image-size.md` |
-| NFR-12 | Security | CRITICAL CVEs in the published image | 0 | 46 | `security-scan.md` |
+| NFR-12 | Security | CRITICAL CVEs in the published image | 0 | 0 (46 HIGH reviewed) | `security-scan.md`
 | NFR-13 | Security | Container runtime user | UID ≠ 0 | UID 1000 | `docker run --rm ghcr.io/nsannn/mlops-nsannn/train:sha-af2c8df id -u` |
 | NFR-14 | Traceability | Published image tags | 100 % `sha-<commit>`, never `latest` | `sha-af2c8df` | GHCR page |
 
@@ -56,7 +56,7 @@ with every experiment reproducible from Git + DVC + MLflow.
 | ID | Category | Requirement | KPI | Measured | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | NFR-15 | Durability | Runs and artifacts after deleting the MLflow and PostgreSQL pods | 100 % kept | 100 % | `kubectl delete pod` test |
-| NFR-16 | Availability | MLflow ready after `kubectl apply` (images present) | ≤ 120 s | <your s> | `kubectl wait` |
+| NFR-16 | Availability | MLflow ready after `kubectl apply` (images present) | ≤ 120 s | 61 s | `kubectl wait` |
 | NFR-17 | Tracking | Laptop runs stored on the cluster server | 100 %, no local `mlruns/` | `mlflow-artifacts:/` URIs | MLflow UI |
 
 
@@ -65,7 +65,7 @@ with every experiment reproducible from Git + DVC + MLflow.
 | Version | Date       | Author      | Changes |
 |---------|------------|-------------|---------|
 | 1.0     | 2026-10-21 |Nojus Sandovas | Initial document: problem, FR-01..04, NFR-01..07 |
-| 1.1     | 2026-10-21 | Nojus Sandovas | MLflow + DVC pipeline, reproducibility NFR-08..10 | |
+| 1.1     | 2026-10-21 | Nojus Sandovas | MLflow + DVC pipeline, reproducibility NFR-08..10 |
 | 1.2     | 2026-10-21 | Nojus Sandovas | Training image on GHCR: containerisation NFR-11..14 with measured values |
 | 1.3     | 2026-10-21 | Nojus Sandovas | Created kind cluster with PostgreSQL and MLFlow NFR-15..17 |
 
