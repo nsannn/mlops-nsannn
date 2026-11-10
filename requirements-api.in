@@ -1,0 +1,7 @@
+# requirements-api.in  (inference image: MLflow client + transformers, no training libs)
+--extra-index-url https://download.pytorch.org/whl/cpu
+mlflow==3.15.2
+torch
+transformers
+fastapi
+uvicorn

@@ -1,0 +1,5 @@
+# ruff.toml
+line-length = 120
+target-version = "py312"
+src = ["src", "scripts", "tests"]   # first-party modules for import sorting
+extend-exclude = ["data", "models"]

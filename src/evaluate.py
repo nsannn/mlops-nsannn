@@ -36,7 +36,7 @@ def main() -> None:
             run_id = run_id_file.read_text().strip()
             for key, value in metrics.items():
                 client.log_metric(run_id, f"eval/{key}", value)
-        except Exception as exc:  # server may be unreachable
+        except Exception as exc:  # noqa: BLE001 - server may be unreachable; metrics.json is already written
             print(f"warning: eval metrics not attached ({exc})")
 
 

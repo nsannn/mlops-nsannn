@@ -15,6 +15,7 @@ import torch
 import yaml
 from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
+
 # Explicit BERT classes: always load these checkpoints (Auto* fails on old configs without model_type).
 from transformers import BertForSequenceClassification, BertTokenizerFast
 
@@ -30,7 +31,7 @@ def git_commit() -> str:
         return os.environ["GIT_COMMIT"]
     try:
         return subprocess.check_output(["git", "rev-parse", "--short=8", "HEAD"], cwd=ROOT, text=True).strip()
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):  # no git binary or no .git
         return "unknown"
 
 
@@ -38,7 +39,7 @@ def dvc_md5(dvc_file: Path) -> str:
     """Raw-data md5 from the .dvc pointer: the link between MLflow and DVC."""
     try:
         return yaml.safe_load(dvc_file.read_text())["outs"][0]["md5"]
-    except Exception:
+    except (OSError, yaml.YAMLError, KeyError, IndexError, TypeError):  # missing or malformed pointer
         return "untracked"
 
 

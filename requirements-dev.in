@@ -1,0 +1,6 @@
+# requirements-dev.in  (CI lint + unit tests; the API tests use a fake model, so no torch)
+ruff
+pytest
+httpx
+fastapi==0.158.1    # same version as in requirements.txt and the API image
+pyyaml
