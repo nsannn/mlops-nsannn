@@ -22,6 +22,7 @@ with every experiment reproducible from Git + DVC + MLflow.
 | FR-02 | `dvc repro` builds the model from pinned raw data: prepare → train → evaluate | Must |
 | FR-03 | Every training run logs params, metrics, dataset, `git_commit` and `dvc_raw_md5` tags and the model to the cluster MLflow | Must |
 | FR-04 | Training runs from a container image (and as a Kubernetes Job) | Should |
+| FR-05 | Every model that passes the quality gate is registered as a version of `tweet-emotion`; serving reads `models:/tweet-emotion@champion` only (v1.4) | Must |
 
 ## 3. Non-functional requirements
 
@@ -66,6 +67,12 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | NFR-16 | Availability | MLflow ready after `kubectl apply` (images present) | ≤ 120 s | 61 s | `kubectl wait` |
 | NFR-17 | Tracking | Laptop runs stored on the cluster server | 100 %, no local `mlruns/` | `mlflow-artifacts:/` URIs | MLflow UI |
 
+### 3.4 Training tracking and registry (v1.4)
+| ID | Category | Requirement | KPI | Measured | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| NFR-18 | Tuning | Hyperparameter search as nested runs | ≥ 5 trials in one parent run | 6 trials (best val F1 0.805) | MLflow run `hpo-optuna` |
+| NFR-19 | Traceability | Every pipeline run has params, step metrics, system metrics, dataset digest, seed and commit tags, model environment | 100 % of runs | 100 % | Run page (e.g. `52fdd3aa`) |
+
 
 ## 7. Change history
 
@@ -75,5 +82,5 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | 1.1     | 2026-10-21 | Nojus Sandovas | MLflow + DVC pipeline, reproducibility NFR-08..10 |
 | 1.2     | 2026-10-21 | Nojus Sandovas | Training image on GHCR: containerisation NFR-11..14 with measured values |
 | 1.3     | 2026-10-21 | Nojus Sandovas | Created kind cluster with PostgreSQL and MLFlow NFR-15..17 |
-| 1.4     | 2026-11-10 | Nojus Sandovas | NFR-04 target 60 s → 120 s: the tuned training process (HPO params, fuller tracking) no longer fits 60 s; measured 88 s |
+| 1.4     | 2026-11-10 | Nojus Sandovas | Full run tracking, Optuna HPO, Model Registry with @champion: FR-05, NFR-18..19. NFR-04 target 60 s → 120 s: the tuned training process (HPO params, fuller tracking) no longer fits 60 s; measured 88 s |
 
