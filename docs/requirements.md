@@ -1,6 +1,6 @@
-# Tweet Emotion Detection — Requirements v1.4
+# Tweet Emotion Detection — Requirements v1.5
 
-Date: 2026-11-10 | Author: Nojus Sandovas
+Date: 2026-11-16 | Author: Nojus Sandovas
 
 ## 1.1 Problem description
 Create a API which can help social-media support team identify tweets and the emotions they encourage. 6 emotions will be tracked and identified (sadness, joy, love, anger, fear, surprise), build MLOps platform around it. Target: accuracy ≥ 0.85 and macro F1 ≥ 0.75 on held-out tweets,
@@ -23,6 +23,7 @@ with every experiment reproducible from Git + DVC + MLflow.
 | FR-03 | Every training run logs params, metrics, dataset, `git_commit` and `dvc_raw_md5` tags and the model to the cluster MLflow | Must |
 | FR-04 | Training runs from a container image (and as a Kubernetes Job) | Should |
 | FR-05 | Every model that passes the quality gate is registered as a version of `tweet-emotion`; serving reads `models:/tweet-emotion@champion` only (v1.4) | Must |
+| FR-06 | `POST /predict` returns the emotion label, its probability, all 6 scores and the serving model version; `GET /health` reports the loaded version (v1.5) | Must |
 
 ## 3. Non-functional requirements
 
@@ -73,6 +74,13 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | NFR-18 | Tuning | Hyperparameter search as nested runs | ≥ 5 trials in one parent run | 6 trials (best val F1 0.805) | MLflow run `hpo-optuna` |
 | NFR-19 | Traceability | Every pipeline run has params, step metrics, system metrics, dataset digest, seed and commit tags, model environment | 100 % of runs | 100 % | Run page (e.g. `52fdd3aa`) |
 
+### 3.5 Training Job and inference API (v1.5)
+| ID | Category | Requirement | KPI | Measured | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| NFR-20 | Operability | Training Job in the cluster, params from ConfigMap, MLflow from Secret | `Completed`, ≤ 5 min | `Completed`, 104 s (F1 0.855, same as the laptop run) | `kubectl get job train -n mlops`, run `e96a23db` (`runner=k8s-job`) |
+| NFR-21 | Performance | API throughput, 100 requests, 4 concurrent clients | ≥ 20 req/s | (v1.6) | `docs/load-test.md` |
+| NFR-22 | Availability | API ready after a rollout, model download included | ≤ 120 s | (v1.6) | `kubectl rollout status` |
+
 
 ## 7. Change history
 
@@ -83,4 +91,5 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | 1.2     | 2026-10-21 | Nojus Sandovas | Training image on GHCR: containerisation NFR-11..14 with measured values |
 | 1.3     | 2026-10-21 | Nojus Sandovas | Created kind cluster with PostgreSQL and MLFlow NFR-15..17 |
 | 1.4     | 2026-11-10 | Nojus Sandovas | Full run tracking, Optuna HPO, Model Registry with @champion: FR-05, NFR-18..19. NFR-04 target 60 s → 120 s: the tuned training process (HPO params, fuller tracking) no longer fits 60 s; measured 88 s |
+| 1.5     | 2026-11-16 | Nojus Sandovas | Training as a Kubernetes Job (ConfigMap params, Secret MLflow address) and the inference API: FR-06, NFR-20..22 (NFR-20 measured) |
 

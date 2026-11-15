@@ -1,0 +1,41 @@
+# k8s/train-job.yaml
+# Training as a Kubernetes Job (CPU). Params come from the ConfigMap, the MLflow address from
+# Secret mlflow-client (created by a command, never in Git).
+# Re-run: kubectl delete job train -n mlops --ignore-not-found && kubectl apply -f k8s/train-job.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: train-params, namespace: mlops}
+data:
+  params.yaml: |
+    prepare:
+      test_size: 0.2
+      seed: 42
+    train:
+      hf_model: google/bert_uncased_L-4_H-256_A-4
+      hf_revision: 387825ce42dbb39b87911cdf8e383ee3b25184f8
+      num_labels: 6
+      learning_rate: 0.000141
+      epochs: 2
+      batch_size: 16
+      max_length: 32
+      random_seed: 42
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: train, namespace: mlops}
+spec:
+  backoffLimit: 0                     # a failed training is a result to look at, not to retry
+  template:
+    metadata: {labels: {app: train}}
+    spec:
+      restartPolicy: Never
+      securityContext: {runAsUser: 1000, runAsNonRoot: true}
+      containers:
+        - name: train
+          image: ghcr.io/nsannn/mlops-nsannn/train:sha-e9d0cf6   # training image built for this step
+          imagePullPolicy: IfNotPresent
+          envFrom: [{secretRef: {name: mlflow-client}}]          # MLFLOW_TRACKING_URI
+          env: [{name: RUNNER, value: k8s-job}]                  # run tag runner=k8s-job
+          resources: {requests: {cpu: "2", memory: 2Gi}, limits: {cpu: "4", memory: 3Gi}}
+          volumeMounts: [{name: params, mountPath: /app/params.yaml, subPath: params.yaml}]
+      volumes: [{name: params, configMap: {name: train-params}}]
