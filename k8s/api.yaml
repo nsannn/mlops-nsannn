@@ -21,7 +21,7 @@ spec:
       securityContext: {runAsUser: 1000, runAsNonRoot: true}
       containers:
         - name: api
-          image: ghcr.io/nsannn/mlops-nsannn/api:sha-0000000   # set by the CI bot commit, never latest
+          image: ghcr.io/nsannn/mlops-nsannn/api:sha-ce4bcb9
           imagePullPolicy: IfNotPresent
           ports: [{containerPort: 8000}]
           envFrom:
