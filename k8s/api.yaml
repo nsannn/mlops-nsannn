@@ -1,0 +1,41 @@
+# k8s/api.yaml
+# Inference API: serves models:/tweet-emotion@champion. The image tag is bumped by CI (bot commit).
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: api-config, namespace: mlops}
+data:
+  MODEL_URI: models:/tweet-emotion@champion
+  # torch otherwise starts one thread per node CPU (10 on this laptop) and is throttled by the 2-CPU limit:
+  # ~90 ms stalls (CFS period) on 1 request in 10. Keep it equal to limits.cpu.
+  OMP_NUM_THREADS: "2"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: emotion-api, namespace: mlops}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: emotion-api}}
+  template:
+    metadata: {labels: {app: emotion-api}}
+    spec:
+      securityContext: {runAsUser: 1000, runAsNonRoot: true}
+      containers:
+        - name: api
+          image: ghcr.io/nsannn/mlops-nsannn/api:sha-0000000   # set by the CI bot commit, never latest
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: api-config}                  # MODEL_URI
+            - secretRef: {name: mlflow-client}                  # MLFLOW_TRACKING_URI
+          # The model downloads at start-up: allow up to 5 min before liveness checks begin.
+          startupProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 5, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 20}
+          resources: {requests: {cpu: 500m, memory: 1Gi}, limits: {cpu: "2", memory: 2Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: emotion-api, namespace: mlops}
+spec:
+  selector: {app: emotion-api}
+  ports: [{port: 80, targetPort: 8000}]

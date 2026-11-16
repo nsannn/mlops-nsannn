@@ -78,8 +78,8 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | ID | Category | Requirement | KPI | Measured | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | NFR-20 | Operability | Training Job in the cluster, params from ConfigMap, MLflow from Secret | `Completed`, ≤ 5 min | `Completed`, 104 s (F1 0.855, same as the laptop run) | `kubectl get job train -n mlops`, run `e96a23db` (`runner=k8s-job`) |
-| NFR-21 | Performance | API throughput, 100 requests, 4 concurrent clients | ≥ 20 req/s | (v1.6) | `docs/load-test.md` |
-| NFR-22 | Availability | API ready after a rollout, model download included | ≤ 120 s | (v1.6) | `kubectl rollout status` |
+| NFR-21 | Performance | API throughput, 100 requests, 4 concurrent clients | ≥ 20 req/s | 100.3 req/s (p95 71 ms) | `docs/load-test.md` |
+| NFR-22 | Availability | API ready after a rollout, model download included | ≤ 120 s | 10–11 s | `kubectl rollout status` |
 
 
 ## 7. Change history
