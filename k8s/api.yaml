@@ -21,7 +21,7 @@ spec:
       securityContext: {runAsUser: 1000, runAsNonRoot: true}
       containers:
         - name: api
-          image: ghcr.io/nsannn/mlops-nsannn/api:sha-f325e5c
+          image: ghcr.io/nsannn/mlops-nsannn/api:sha-584e132
           imagePullPolicy: IfNotPresent
           ports: [{containerPort: 8000}]
           envFrom:
