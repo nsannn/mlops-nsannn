@@ -20,6 +20,7 @@ annotated-types==0.8.0
 anyio==4.15.1
     # via
     #   httpx2
+    #   mlflow-skinny
     #   starlette
 attrs==26.1.0
     # via aiohttp
@@ -147,11 +148,11 @@ matplotlib==3.11.2
     # via mlflow
 mdurl==0.1.2
     # via markdown-it-py
-mlflow==3.15.2
+mlflow==3.17.0
     # via -r requirements-api.in
-mlflow-skinny==3.15.2
+mlflow-skinny==3.17.0
     # via mlflow
-mlflow-tracing==3.15.2
+mlflow-tracing==3.17.0
     # via mlflow
 mpmath==1.3.0
     # via sympy

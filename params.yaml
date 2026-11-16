@@ -11,3 +11,6 @@ train:
   batch_size: 16
   max_length: 32
   random_seed: 42
+gate:
+  metric: f1          # macro F1 from metrics.json
+  threshold: 0.80     # current model 0.855; NFR-02 asks >= 0.75, the gate is stricter

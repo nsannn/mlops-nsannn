@@ -1,0 +1,64 @@
+# .github/workflows/ml-pipeline.yml
+name: ml-pipeline
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["k8s/**", "docs/**", "**.md"]   # manifest bumps, reverts and doc edits don't retrigger
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  API_IMAGE: ghcr.io/${{ github.repository }}/api
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -v
+
+  build-push:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions: {contents: read, packages: write}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: >-
+          docker build -f docker/Dockerfile.api
+          --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          -t "$API_IMAGE:${{ steps.tag.outputs.tag }}" .
+      - name: Trivy (block CRITICAL)
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.1
+          image --severity CRITICAL --ignore-unfixed --exit-code 1 "$API_IMAGE:${{ steps.tag.outputs.tag }}"
+      - name: Push
+        run: docker push "$API_IMAGE:${{ steps.tag.outputs.tag }}"
