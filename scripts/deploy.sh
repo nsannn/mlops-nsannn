@@ -18,5 +18,6 @@ python scripts/registry.py promote        # @champion -> that version; the old c
 kubectl apply -f k8s/api.yaml             # the image tag from the CI bump commit
 kubectl rollout restart deployment/emotion-api -n mlops   # pods read @champion only at start-up
 kubectl rollout status deployment/emotion-api -n mlops --timeout=300s
+# Retries: right after a rollout the Service can still route to the old pod that is shutting down.
 kubectl run "smoke-$(date +%s)" -n mlops --rm -i --restart=Never --image=curlimages/curl:8.11.1 -- \
-  curl -sf http://emotion-api/health
+  curl -sf --retry 5 --retry-delay 2 --retry-all-errors http://emotion-api/health
