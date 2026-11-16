@@ -1,4 +1,4 @@
-# Tweet Emotion Detection — Requirements v1.5
+# Tweet Emotion Detection — Requirements v1.6
 
 Date: 2026-11-16 | Author: Nojus Sandovas
 
@@ -81,6 +81,24 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | NFR-21 | Performance | API throughput, 100 requests, 4 concurrent clients | ≥ 20 req/s | 100.3 req/s (p95 71 ms) | `docs/load-test.md` |
 | NFR-22 | Availability | API ready after a rollout, model download included | ≤ 120 s | 10–11 s | `kubectl rollout status` |
 
+### 3.6 Inference and delivery (v1.6)
+| ID | Category | Requirement | KPI | Measured | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| NFR-05 | Performance | `/predict` latency, 100 requests, 1 client, in the cluster | p95 ≤ 50 ms | p95 7.2 ms (p50 6.0 ms) | `docs/load-test.md` |
+| NFR-06 | Size | Saved model weights | ≤ 60 MB | 42.6 MiB (44.7 MB) | `docs/load-test.md` |
+| NFR-23 | Recoverability | Model rollback until `/health` reports the previous version | ≤ 5 min | 17 s (v2 → v1) | `docs/cicd.md`, rollback drill |
+| NFR-24 | Delivery | CI/CD pipeline duration, push to the image-tag commit | ≤ 15 min | 7 min 56 s – 9 min 56 s (5 green runs) | `docs/cicd.md`, GitHub Actions |
+| NFR-25 | Quality | A model below the gate (macro F1 ≥ 0.80) is never built, registered or deployed | 100 % blocked | Blocked: run #6, F1 0.0842, `build-push` skipped, nothing deployed | `docs/cicd.md`, red run |
+| NFR-26 | Security | Fixable CRITICAL CVEs in the API image | 0 (Trivy gate in CI) | 0 | `build-push` job, Trivy step |
+
+Throughput (NFR-21) is measured in 3.5: 100.3 req/s with 4 clients. NFR-05 and NFR-21 were met only after fixing CPU
+throttling in the API pod (`OMP_NUM_THREADS=2`, one inference at a time); before the fix p95 was 92 ms
+(`docs/load-test.md`).
+
+**Known risk:** mlflow 3.15.2 has CVE-2026-116692 (CRITICAL, fixed in 3.17.0), published after the U1 scan. The API
+image uses mlflow 3.17.0 (NFR-26), but the MLflow server image and the training image still contain 3.15.2, so NFR-12
+no longer holds for the training image.
+
 
 ## 7. Change history
 
@@ -92,4 +110,5 @@ target is set to ≤ 120 s, which still fits inside the reproduction budget of N
 | 1.3     | 2026-10-21 | Nojus Sandovas | Created kind cluster with PostgreSQL and MLFlow NFR-15..17 |
 | 1.4     | 2026-11-10 | Nojus Sandovas | Full run tracking, Optuna HPO, Model Registry with @champion: FR-05, NFR-18..19. NFR-04 target 60 s → 120 s: the tuned training process (HPO params, fuller tracking) no longer fits 60 s; measured 88 s |
 | 1.5     | 2026-11-16 | Nojus Sandovas | Training as a Kubernetes Job (ConfigMap params, Secret MLflow address) and the inference API: FR-06, NFR-20..22 (NFR-20 measured) |
+| 1.6     | 2026-11-16 | Nojus Sandovas | CI/CD with quality gate and rollback, measured inference NFRs: NFR-05, NFR-06, NFR-21, NFR-22 measured; new NFR-23..26; mlflow CVE noted as a known risk |
 
