@@ -1,12 +1,15 @@
-# MLOps U1 — Tweet Emotion Detection
+# MLOps U1 + U2 — Tweet Emotion Detection
 
 This project builds a reproducible training pipeline for a model that classifies tweets into 6 emotions
 (sadness, joy, love, anger, fear, surprise). It uses Git, DVC, Docker and a local Kubernetes (`kind`) cluster,
-with every experiment tracked in an MLflow server that runs inside the cluster.
+with every experiment tracked in an MLflow server that runs inside the cluster. U2 adds hyperparameter search,
+a Model Registry with `@champion`, a training Job and an inference API in the same cluster, and CI/CD with a
+quality gate and rollback.
 
 - **Model:** [`google/bert_uncased_L-4_H-256_A-4`](https://huggingface.co/google/bert_uncased_L-4_H-256_A-4) (11M parameters), fine-tuned on CPU
 - **Data:** [`dair-ai/emotion`](https://huggingface.co/datasets/dair-ai/emotion), seeded 10k-tweet stratified sample
-- **Submission:** tag `u1-final` · requirements in [`docs/requirements.md`](docs/requirements.md)
+- **Submission:** tags `u1-final` and `u2-final` · requirements in [`docs/requirements.md`](docs/requirements.md) (v1.6) ·
+  reports [`docs/u1-report.md`](docs/u1-report.md), [`docs/u2-report.md`](docs/u2-report.md)
 
 ---
 
@@ -18,12 +21,14 @@ The project follows the required structure: `src/`, `docker/`, `k8s/`, `docs/`.
 
 | Path | Contents |
 | --- | --- |
-| `src/` | Pipeline code: `prepare_data.py`, `train.py`, `evaluate.py`, `model_utils.py` |
-| `scripts/` | `fetch_data.py`: downloads the pinned dataset and takes the sample |
-| `docker/` | `Dockerfile` (training image), `Dockerfile.mlflow` (MLflow server image) |
-| `k8s/` | `kind-config.yaml` (cluster as code) and Kubernetes manifests |
-| `docs/` | Requirements, image size, security scan, SBOM |
-| `params.yaml`, `dvc.yaml`, `dvc.lock` | Hyperparameters, pipeline definition, pipeline lock (data and output hashes) |
+| `src/` | Pipeline code: `prepare_data.py`, `train.py`, `evaluate.py`, `model_utils.py`; inference API `serve.py` |
+| `scripts/` | `fetch_data.py` (pinned dataset sample), `hpo.py` (Optuna), `registry.py` (aliases), `check_model_gate.py`, `deploy.sh`, `load_test.py` |
+| `docker/` | `Dockerfile` (training image), `Dockerfile.mlflow` (MLflow server image), `Dockerfile.api` (inference image) |
+| `k8s/` | `kind-config.yaml` (cluster as code), MLflow + PostgreSQL, `train-job.yaml`, `api.yaml` |
+| `tests/` | Unit tests for the quality gate and the API contract |
+| `.github/workflows/` | `ml-pipeline.yml`: lint → test → model-gate → build-push |
+| `docs/` | Requirements, reports, CI/CD evidence, load test, image size, security scan, SBOM |
+| `params.yaml`, `dvc.yaml`, `dvc.lock` | Hyperparameters and quality gate, pipeline definition, pipeline lock (data and output hashes) |
 | `reproduce.py` | Re-creates any historical MLflow run |
 
 ### Prerequisites
@@ -116,7 +121,8 @@ dvc repro --force
 | exp 2 | learning rate 3e-4 | 0.858 | 0.821 | 1.0 min |
 | exp 3 (default) | max_length 24 | 0.860 | 0.834 | 52 s |
 
-Exp 3 is the default in `params.yaml`: it meets the ≤ 60 s training target (NFR-04) at a small accuracy cost.
+Exp 3 was the U1 default: it met the then ≤ 60 s training target (NFR-04) at a small accuracy cost. U2 changed the
+defaults after the hyperparameter search (section 6).
 
 ---
 
@@ -149,8 +155,154 @@ and the repo is restored to the starting branch. Measured: about 85 s with Δ = 
 
 ---
 
-## 5. Cleaning up
+## 5. Before every session
+
+Start Docker Desktop first; the kind cluster and MLflow come back on their own (about 30 s). Then:
 
 ```bash
-kind delete cluster --name mlops     # also deletes the PVC data (all MLflow runs)
+cd ~/mlops-nsannn && source .venv/bin/activate && export MLFLOW_TRACKING_URI=http://localhost:5000
+kubectl get pods -n mlops && curl -s localhost:5000/health   # pods Running, OK
+```
+
+Without `MLFLOW_TRACKING_URI`, MLflow silently writes to a local `mlflow.db` instead of the cluster.
+
+---
+
+## 6. Training and hyperparameter search (U2-R1)
+
+Every training run logs params, `train_loss` per 10 steps and `epoch_loss` per epoch, **system metrics**
+(CPU, memory, disk, network every 2 s via `psutil`), the train and test **datasets with digests**, the tags
+`git_commit`, `random_seed`, `dvc_raw_md5`, `runner`, and the model with its environment (`requirements.txt`,
+`python_env.yaml`) and signature.
+
+```bash
+dvc repro                               # prepare -> train -> evaluate, logged to the cluster MLflow
+python scripts/hpo.py --trials 6        # Optuna (TPE, seeded): parent run hpo-optuna + 6 nested trial runs
+```
+
+The search scores trials on a validation split of the training data, never on the test set. Its best setting
+(`max_length` 32, `batch_size` 16) is now the default; the current model uses `learning_rate` 1.2e-4.
+
+| Run | Accuracy | Macro F1 | Notes |
+| --- | --- | --- | --- |
+| v1 (HPO best, lr 1.41e-4) | 0.887 | 0.855 | Registry v1 |
+| v2 (lr 1.2e-4) | 0.880 | 0.846 | Registry v2, currently `@champion` |
+
+In the UI: experiment `tweet-emotion` → the `hpo-optuna` run has an expand arrow with its 6 trials; select them →
+**Compare** for the parameter chart. Each run's **System metrics** tab shows the resource charts.
+
+---
+
+## 7. Model Registry (U2-R2)
+
+Registered model `tweet-emotion`, managed with aliases (stages are deprecated in MLflow 3):
+
+| Alias | Meaning | Set by |
+| --- | --- | --- |
+| `@candidate` | Latest version that passed the quality gate | `python scripts/registry.py register` |
+| `@champion` | The version the API serves: **the only serving source** | `python scripts/registry.py promote` |
+| `@previous` | The champion before the last change | `promote` and `rollback` |
+
+`register` reads `models/run_id.txt` and is idempotent (the same run never gets a second version).
+In the UI: **Models → tweet-emotion** shows the versions, their aliases and the runs they came from.
+
+---
+
+## 8. Training Job in the cluster (U2-R3)
+
+The training image runs as a Kubernetes Job. Hyperparameters come from the ConfigMap `train-params` (a full
+`params.yaml`, mounted over `/app/params.yaml`); the MLflow address comes from Secret `mlflow-client`, which is
+created by a command and never stored in Git.
+
+```bash
+# once: Secret with the in-cluster MLflow address
+kubectl create secret generic mlflow-client -n mlops \
+  --from-literal=MLFLOW_TRACKING_URI=http://mlflow.mlops.svc.cluster.local:5000
+
+# training image for the current commit, pushed to GHCR and loaded into the node
+TAG=sha-$(git rev-parse --short=7 HEAD)
+docker build -f docker/Dockerfile --build-arg GIT_COMMIT=${TAG#sha-} -t ghcr.io/nsannn/mlops-nsannn/train:$TAG .
+docker push ghcr.io/nsannn/mlops-nsannn/train:$TAG
+kind load docker-image ghcr.io/nsannn/mlops-nsannn/train:$TAG --name mlops
+sed -i "s|train:sha-[0-9a-f]*|train:$TAG|" k8s/train-job.yaml
+
+# run (or re-run after changing a value in the ConfigMap part of the file)
+kubectl delete job train -n mlops --ignore-not-found && kubectl apply -f k8s/train-job.yaml
+kubectl logs -n mlops job/train -f
+kubectl get job,pods -n mlops -l app=train             # Complete 1/1, pod Completed
+```
+
+The run appears in MLflow with the tag `runner=k8s-job` (measured: `Completed` in 104 s).
+
+---
+
+## 9. Inference API (U2-R4)
+
+FastAPI service (`src/serve.py`, image `docker/Dockerfile.api`). At start-up it resolves
+`models:/tweet-emotion@champion` to a version and downloads that model from MLflow; the image contains no model.
+Deployment + Service in `k8s/api.yaml` (`ClusterIP`; reached through a port-forward).
+
+```bash
+kubectl port-forward -n mlops svc/emotion-api 8000:80        # keep running in its own terminal
+curl -s localhost:8000/health                                # {"status":"ok",...,"version":"2",...}
+curl -s -X POST localhost:8000/predict -H 'Content-Type: application/json' -d '{"text": "i am so happy today"}'
+python scripts/load_test.py --n 100 --concurrency 1          # p50/p95/p99 and throughput
+```
+
+| What | Address |
+| --- | --- |
+| API | `http://localhost:8000` via port-forward; inside the cluster `http://emotion-api.mlops.svc` |
+| Interactive docs | [http://localhost:8000/docs](http://localhost:8000/docs) |
+| Load test results | [`docs/load-test.md`](docs/load-test.md): p95 7.2 ms (1 client), 100 req/s (4 clients) |
+
+---
+
+## 10. CI/CD, quality gate and rollback (U2-R5, U2-R6)
+
+GitHub Actions ([`.github/workflows/ml-pipeline.yml`](.github/workflows/ml-pipeline.yml)) runs on GitHub's
+runners and never connects to the cluster:
+
+| Job | Pull request | Push to `main` |
+| --- | --- | --- |
+| `lint` → `test` | yes | `ruff check .`, `pytest` |
+| `model-gate` | yes | data from the pinned HF revision (md5 checked against DVC) → `dvc repro` → gate |
+| `build-push` | no | API image → Trivy (blocks CRITICAL) → GHCR `sha-<commit>` → bot commit of the tag to `k8s/api.yaml` |
+
+The **quality gate** is set in `params.yaml` (`gate: metric: f1, threshold: 0.80`) and checked by
+`scripts/check_model_gate.py` (exit 1 stops the pipeline). Changing the threshold retrains nothing.
+
+**Deploy** (the step Argo CD would automate) brings the cluster to the Git state:
+
+```bash
+git pull && ./scripts/deploy.sh   # gate -> register @candidate -> promote @champion -> kubectl apply -> restart -> smoke test
+```
+
+**Rollback** of the model (measured 17 s):
+
+```bash
+python scripts/registry.py rollback && kubectl rollout restart deployment/emotion-api -n mlops \
+  && kubectl rollout status deployment/emotion-api -n mlops
+```
+
+Green and red runs, the rollback drill and the other rollback options: [`docs/cicd.md`](docs/cicd.md).
+Actions: <https://github.com/nsannn/mlops-nsannn/actions>.
+
+---
+
+## 11. Where to look
+
+| What | Where |
+| --- | --- |
+| Runs, HPO tree, system metrics | MLflow [http://localhost:5000](http://localhost:5000) → Model training → `tweet-emotion` |
+| Registered model and aliases | MLflow → **Models** → `tweet-emotion` |
+| CI runs (green and red) | [GitHub Actions](https://github.com/nsannn/mlops-nsannn/actions) |
+| Images | GHCR packages `mlops-nsannn/train`, `mlops-nsannn/api` |
+| Measurements | [`docs/requirements.md`](docs/requirements.md), [`docs/load-test.md`](docs/load-test.md), [`docs/cicd.md`](docs/cicd.md) |
+
+---
+
+## 12. Cleaning up
+
+```bash
+kind delete cluster --name mlops     # also deletes the PVC data (all MLflow runs and registered models)
 ```

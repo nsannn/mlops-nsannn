@@ -1,5 +1,5 @@
 # .github/workflows/ml-pipeline.yml
-# CI (week 6 pattern): lint -> test -> model-gate (dvc repro + gate) -> build-push (image + manifest bump).
+# CI: lint -> test -> model-gate (dvc repro + gate) -> build-push (image + manifest bump).
 # CI never connects to the cluster: the new image tag goes to Git and scripts/deploy.sh applies it.
 name: ml-pipeline
 
@@ -41,7 +41,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     env:
-      MLFLOW_TRACKING_URI: sqlite:////tmp/ci-mlflow.db   # throwaway: the kind MLflow isn't reachable from GitHub
+      MLFLOW_TRACKING_URI: sqlite:////tmp/ci-mlflow.db  
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
