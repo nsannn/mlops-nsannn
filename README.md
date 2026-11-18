@@ -24,10 +24,11 @@ The project follows the required structure: `src/`, `docker/`, `k8s/`, `docs/`.
 | `src/` | Pipeline code: `prepare_data.py`, `train.py`, `evaluate.py`, `model_utils.py`; inference API `serve.py`; ONNX variant `serve_onnx.py`, `onnx_infer.py`, `onnx_pyfunc.py` |
 | `scripts/` | `fetch_data.py` (pinned dataset sample), `hpo.py` (Optuna), `registry.py` (aliases), `check_model_gate.py`, `deploy.sh`, `load_test.py`, `export_onnx.py` |
 | `docker/` | `Dockerfile` (training image), `Dockerfile.mlflow` (MLflow server image), `Dockerfile.api` (inference image), `Dockerfile.api-onnx` (slim ONNX inference image) |
-| `k8s/` | `kind-config.yaml` (cluster as code), MLflow + PostgreSQL, `train-job.yaml`, `api.yaml`, `api-onnx.yaml` |
+| `k8s/` | `kind-config.yaml` (cluster as code), MLflow + PostgreSQL, `train-job.yaml`; `base/`: both inference APIs (`api.yaml`, `api-onnx.yaml`), managed by Argo CD |
+| `deploy/` | `overlays/production/` (Kustomize overlay Argo CD applies), `argocd/application.yaml` |
 | `tests/` | Unit tests for the quality gate and both API contracts |
 | `.github/workflows/` | `ml-pipeline.yml`: lint → test → model-gate → build-push |
-| `docs/` | Requirements, reports, CI/CD evidence, load test, image size, security scan, SBOM |
+| `docs/` | Requirements, reports, CI/CD evidence, Argo CD drills, load test, ONNX comparison, image size, security scan, SBOM |
 | `params.yaml`, `dvc.yaml`, `dvc.lock` | Hyperparameters and quality gate, pipeline definition, pipeline lock (data and output hashes) |
 | `reproduce.py` | Re-creates any historical MLflow run |
 
@@ -321,19 +322,54 @@ instead of 42.6 MiB, pod memory 140 MiB instead of 1 010 MiB, p95 4.0 ms instead
 
 ---
 
-## 12. Where to look
+## 12. Argo CD (U2-E5)
+
+Argo CD runs in the cluster (namespace `argocd`) and keeps both inference APIs equal to Git: it polls `main`,
+applies `deploy/overlays/production` (= `k8s/base/`), and reverts manual changes (self-heal). MLflow, PostgreSQL
+and the Job are outside it. CI's image-tag commit is therefore deployed without any manual step.
+
+```bash
+# install (once), pinned version
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side --force-conflicts \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
+kubectl wait -n argocd --for=condition=Available deploy --all --timeout=300s
+
+# the Application (the base/overlay layout must already be on GitHub)
+kubectl apply -f deploy/argocd/application.yaml
+kubectl get application emotion-api -n argocd     # SYNC STATUS Synced, HEALTH STATUS Healthy
+
+# UI and CLI (CLI: github.com/argoproj/argo-cd/releases, v3.5.3, argocd-linux-amd64)
+kubectl port-forward svc/argocd-server -n argocd 8443:443        # own terminal; UI https://localhost:8443, user admin
+argocd admin initial-password -n argocd                          # then change it: argocd account update-password
+argocd login localhost:8443 --username admin --insecure
+```
+
+| What | Command |
+| --- | --- |
+| Sync now instead of within ~6 min | `kubectl annotate application emotion-api -n argocd argocd.argoproj.io/refresh=hard --overwrite` |
+| History | `argocd app history emotion-api` |
+| Rollback | `argocd app set emotion-api --sync-policy none`, `argocd app rollback emotion-api <ID>`, then `git revert <bump-commit>` and `argocd app set emotion-api --sync-policy automated --self-heal --auto-prune` |
+
+Measured ([`docs/argocd.md`](docs/argocd.md)): bump commit → new image applied in 374 s with no manual step,
+self-heal of a manual change within 1 s, rollback through Argo CD answering after 17 s.
+
+---
+
+## 13. Where to look
 
 | What | Where |
 | --- | --- |
 | Runs, HPO tree, system metrics | MLflow [http://localhost:5000](http://localhost:5000) → Model training → `tweet-emotion` |
 | Registered models and aliases | MLflow → **Models** → `tweet-emotion`, `tweet-emotion-onnx` |
 | CI runs (green and red) | [GitHub Actions](https://github.com/nsannn/mlops-nsannn/actions) |
+| Deployment state | Argo CD UI [https://localhost:8443](https://localhost:8443) (port-forward) → application `emotion-api` |
 | Images | GHCR packages `mlops-nsannn/train`, `mlops-nsannn/api`; the ONNX image is built locally and loaded into kind |
-| Measurements | [`docs/requirements.md`](docs/requirements.md), [`docs/load-test.md`](docs/load-test.md), [`docs/cicd.md`](docs/cicd.md), [`docs/onnx-comparison.md`](docs/onnx-comparison.md) |
+| Measurements | [`docs/requirements.md`](docs/requirements.md), [`docs/load-test.md`](docs/load-test.md), [`docs/cicd.md`](docs/cicd.md), [`docs/onnx-comparison.md`](docs/onnx-comparison.md), [`docs/argocd.md`](docs/argocd.md) |
 
 ---
 
-## 13. Cleaning up
+## 14. Cleaning up
 
 ```bash
 kind delete cluster --name mlops     # also deletes the PVC data (all MLflow runs and registered models)

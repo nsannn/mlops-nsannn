@@ -15,8 +15,9 @@ python scripts/check_model_gate.py        # the same gate as CI, on the model yo
 python scripts/registry.py register       # models/run_id.txt -> registry version, alias @candidate
 python scripts/registry.py promote        # @champion -> that version; the old champion keeps @previous
 
-# Argo CD applies Git: ask it to refresh now (instead of within ~3 min) and wait for the image named in Git.
-kubectl annotate application emotion-api -n argocd argocd.argoproj.io/refresh=normal --overwrite
+# Argo CD applies Git: ask it to refresh now and wait for the image named in Git. "hard" also bypasses the
+# repo-server's cached view of the branch; without it a new commit can take ~6 min (measured 374 s).
+kubectl annotate application emotion-api -n argocd argocd.argoproj.io/refresh=hard --overwrite
 WANT=$(awk '/image: ghcr.io\/.*\/api:/ {print $2}' k8s/base/api.yaml)
 for _ in $(seq 1 60); do
   [ "$(kubectl get deploy emotion-api -n mlops -o jsonpath='{.spec.template.spec.containers[0].image}')" = "$WANT" ] && break

@@ -2,7 +2,7 @@
 
 **Author:** Nojus Sandovas  
 **Date:** 2026-11-18  
-**Repo:** https://github.com/nsannn/mlops-nsannn · tag `u2-final` · requirements v1.7
+**Repo:** https://github.com/nsannn/mlops-nsannn · tag `u2-final` · requirements v1.8
 
 ---
 
@@ -56,12 +56,17 @@ cluster ─► emotion-api pod: resolves models:/tweet-emotion@champion at start
     After: `champion: 1`, `/health` and `/predict` version 1, same image `api:sha-f325e5c`. The old model was
     answering **17 s** after the decision (NFR-23 ≤ 5 min). Details and the other rollback levels: `docs/cicd.md`.
 * **U2-R7:** `docs/requirements.md` v1.4 → v1.6 (Git tags `v1.4`–`v1.6`): FR-05..06 and NFR-18..26, each with a
-  measured value; v1.7 adds NFR-27..29 for the ONNX variant.
+  measured value; v1.7 and v1.8 add NFR-27..32 for the extensions.
 * **U2-E4 (extension):** `scripts/export_onnx.py` exports `tweet-emotion@champion` to ONNX, quantizes it to INT8,
   checks parity (7.2e-7) and F1 (0.8461 vs 0.8464) and registers `tweet-emotion-onnx@champion`. A slim API
   (`src/serve_onnx.py`, `docker/Dockerfile.api-onnx`, no torch) runs next to the PyTorch one as `emotion-api-onnx`,
   still loading from the registry by alias. Same load test (`docs/onnx-comparison.md`): image 415 MB vs 1 940 MB,
   pod memory 140 vs 1 010 MiB, p95 4.0 vs 6.6 ms (1 client), 587 vs 108 req/s (4 clients).
+* **U2-E5 (extension):** Argo CD v3.5.3 in the cluster manages both APIs (`k8s/base` + overlay
+  `deploy/overlays/production`, `deploy/argocd/application.yaml`), so CI's image-tag commit is deployed by pull with
+  no manual `kubectl apply`. Drills (`docs/argocd.md`): auto-sync of a bump commit in 374 s, self-heal of a manual
+  `kubectl scale` within 1 s, `argocd app rollback` answering from the old image after 17 s, then `git revert` to
+  match Git. `deploy.sh` keeps only the registry step Argo CD can't see (`@champion`).
 
 ## 2. What did not work / technical issues and fixes
 
@@ -89,4 +94,5 @@ cluster ─► emotion-api pod: resolves models:/tweet-emotion@champion at start
 * CI/CD, gate, deploy, rollback: **~4.5 h**
 * Load test, documentation and report: **~2 h**
 * ONNX extension (U2-E4): **~2 h**
-* **Total:** ~14 h
+* Argo CD extension (U2-E5): **~2.5 h**
+* **Total:** ~16.5 h

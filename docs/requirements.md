@@ -1,6 +1,6 @@
-# Tweet Emotion Detection — Requirements v1.7
+# Tweet Emotion Detection — Requirements v1.8
 
-Date: 2026-11-18 | Author: Nojus Sandovas
+Date: 2026-11-19 | Author: Nojus Sandovas
 
 ## 1.1 Problem description
 Create a API which can help social-media support team identify tweets and the emotions they encourage. 6 emotions will be tracked and identified (sadness, joy, love, anger, fear, surprise), build MLOps platform around it. Target: accuracy ≥ 0.85 and macro F1 ≥ 0.75 on held-out tweets,
@@ -106,6 +106,17 @@ no longer holds for the training image.
 | NFR-28 | Performance | ONNX `/predict` p95, 100 requests, 1 client, in the cluster | ≤ PyTorch p95 | 4.0 ms vs 6.6 ms | `docs/onnx-comparison.md` |
 | NFR-29 | Quality | ONNX (INT8) model vs the PyTorch source: probability parity and macro F1 | parity ≤ 1e-4, ΔF1 ≤ 0.005 | 7.2e-7, ΔF1 0.0003 | `scripts/export_onnx.py`, run `04bf43a1` |
 
+### 3.8 GitOps deployment with Argo CD (v1.8, U2-E5)
+| ID | Category | Requirement | KPI | Measured | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| NFR-30 | Delivery | Image-tag commit → new image applied in the cluster, no manual step | ≤ 10 min | 374 s (pod Ready 435 s) | `docs/argocd.md`, drill 1 |
+| NFR-31 | Consistency | Manual change in the cluster reverted to Git by self-heal | ≤ 1 min | 1 s | `docs/argocd.md`, drill 2 |
+| NFR-32 | Recoverability | Rollback through Argo CD until `/health` answers from the previous image | ≤ 5 min | 17 s | `docs/argocd.md`, drill 3 |
+
+NFR-30 is set from how Argo CD polls (every 2 min plus up to 1 min jitter, plus the repo server's cached view of
+the branch), not from the course's "≤ 3 min" estimate, which the first measurement (374 s) exceeded.
+`scripts/deploy.sh` requests a hard refresh, so a deployment run by hand syncs immediately.
+
 
 ## 7. Change history
 
@@ -119,4 +130,5 @@ no longer holds for the training image.
 | 1.5     | 2026-11-16 | Nojus Sandovas | Training as a Kubernetes Job (ConfigMap params, Secret MLflow address) and the inference API: FR-06, NFR-20..22 (NFR-20 measured) |
 | 1.6     | 2026-11-16 | Nojus Sandovas | CI/CD with quality gate and rollback, measured inference NFRs: NFR-05, NFR-06, NFR-21, NFR-22 measured; new NFR-23..26; mlflow CVE noted as a known risk |
 | 1.7     | 2026-11-18 | Nojus Sandovas | U2-E4 ONNX variant (INT8, slim image without torch, `tweet-emotion-onnx@champion`): NFR-27..29 measured |
+| 1.8     | 2026-11-19 | Nojus Sandovas | U2-E5 Argo CD: both APIs deployed by GitOps (auto-sync, self-heal, rollback): NFR-30..32 measured |
 
