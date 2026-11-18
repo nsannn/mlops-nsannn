@@ -21,11 +21,11 @@ The project follows the required structure: `src/`, `docker/`, `k8s/`, `docs/`.
 
 | Path | Contents |
 | --- | --- |
-| `src/` | Pipeline code: `prepare_data.py`, `train.py`, `evaluate.py`, `model_utils.py`; inference API `serve.py` |
-| `scripts/` | `fetch_data.py` (pinned dataset sample), `hpo.py` (Optuna), `registry.py` (aliases), `check_model_gate.py`, `deploy.sh`, `load_test.py` |
-| `docker/` | `Dockerfile` (training image), `Dockerfile.mlflow` (MLflow server image), `Dockerfile.api` (inference image) |
-| `k8s/` | `kind-config.yaml` (cluster as code), MLflow + PostgreSQL, `train-job.yaml`, `api.yaml` |
-| `tests/` | Unit tests for the quality gate and the API contract |
+| `src/` | Pipeline code: `prepare_data.py`, `train.py`, `evaluate.py`, `model_utils.py`; inference API `serve.py`; ONNX variant `serve_onnx.py`, `onnx_infer.py`, `onnx_pyfunc.py` |
+| `scripts/` | `fetch_data.py` (pinned dataset sample), `hpo.py` (Optuna), `registry.py` (aliases), `check_model_gate.py`, `deploy.sh`, `load_test.py`, `export_onnx.py` |
+| `docker/` | `Dockerfile` (training image), `Dockerfile.mlflow` (MLflow server image), `Dockerfile.api` (inference image), `Dockerfile.api-onnx` (slim ONNX inference image) |
+| `k8s/` | `kind-config.yaml` (cluster as code), MLflow + PostgreSQL, `train-job.yaml`, `api.yaml`, `api-onnx.yaml` |
+| `tests/` | Unit tests for the quality gate and both API contracts |
 | `.github/workflows/` | `ml-pipeline.yml`: lint → test → model-gate → build-push |
 | `docs/` | Requirements, reports, CI/CD evidence, load test, image size, security scan, SBOM |
 | `params.yaml`, `dvc.yaml`, `dvc.lock` | Hyperparameters and quality gate, pipeline definition, pipeline lock (data and output hashes) |
@@ -289,19 +289,49 @@ Actions: <https://github.com/nsannn/mlops-nsannn/actions>.
 
 ---
 
-## 11. Where to look
+## 11. ONNX variant (U2-E4)
+
+A second, slim API serves the same model exported to ONNX and quantized to INT8, next to the PyTorch API. It still
+loads from the registry by alias (`models:/tweet-emotion-onnx@champion`); its image has no torch, no transformers
+and no model inside.
+
+```bash
+# export the current tweet-emotion@champion, check parity / F1 against it, register tweet-emotion-onnx@champion
+python scripts/export_onnx.py --no-register      # checks only
+python scripts/export_onnx.py                    # checks + register (INT8; --variant fp32 for the unquantized one)
+
+# slim image for the current commit, scanned, loaded into kind and deployed as emotion-api-onnx
+TAG=sha-$(git rev-parse --short=7 HEAD)
+docker build -f docker/Dockerfile.api-onnx -t ghcr.io/nsannn/mlops-nsannn/api-onnx:$TAG .
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.1 image \
+  --severity CRITICAL --ignore-unfixed --exit-code 1 ghcr.io/nsannn/mlops-nsannn/api-onnx:$TAG
+kind load docker-image ghcr.io/nsannn/mlops-nsannn/api-onnx:$TAG --name mlops
+sed -i "s|api-onnx:sha-[0-9a-f]*|api-onnx:$TAG|" k8s/api-onnx.yaml
+kubectl apply -f k8s/api-onnx.yaml && kubectl rollout status deployment/emotion-api-onnx -n mlops
+
+kubectl port-forward -n mlops svc/emotion-api-onnx 8001:80      # own terminal
+python scripts/load_test.py --url http://localhost:8001/predict --n 100 --concurrency 1
+```
+
+Result ([`docs/onnx-comparison.md`](docs/onnx-comparison.md)): image 415 MB instead of 1 940 MB, model 10.8 MiB
+instead of 42.6 MiB, pod memory 140 MiB instead of 1 010 MiB, p95 4.0 ms instead of 6.6 ms (1 client) and
+587 instead of 108 req/s (4 clients), macro F1 0.8461 instead of 0.8464.
+
+---
+
+## 12. Where to look
 
 | What | Where |
 | --- | --- |
 | Runs, HPO tree, system metrics | MLflow [http://localhost:5000](http://localhost:5000) → Model training → `tweet-emotion` |
-| Registered model and aliases | MLflow → **Models** → `tweet-emotion` |
+| Registered models and aliases | MLflow → **Models** → `tweet-emotion`, `tweet-emotion-onnx` |
 | CI runs (green and red) | [GitHub Actions](https://github.com/nsannn/mlops-nsannn/actions) |
-| Images | GHCR packages `mlops-nsannn/train`, `mlops-nsannn/api` |
-| Measurements | [`docs/requirements.md`](docs/requirements.md), [`docs/load-test.md`](docs/load-test.md), [`docs/cicd.md`](docs/cicd.md) |
+| Images | GHCR packages `mlops-nsannn/train`, `mlops-nsannn/api`; the ONNX image is built locally and loaded into kind |
+| Measurements | [`docs/requirements.md`](docs/requirements.md), [`docs/load-test.md`](docs/load-test.md), [`docs/cicd.md`](docs/cicd.md), [`docs/onnx-comparison.md`](docs/onnx-comparison.md) |
 
 ---
 
-## 12. Cleaning up
+## 13. Cleaning up
 
 ```bash
 kind delete cluster --name mlops     # also deletes the PVC data (all MLflow runs and registered models)

@@ -11,3 +11,5 @@ pyarrow
 pyyaml
 psutil
 optuna
+onnx          # U2-E4: export (scripts/export_onnx.py)
+onnxruntime   # U2-E4: quantization, parity check, evaluation

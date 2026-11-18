@@ -1,0 +1,39 @@
+# k8s/api-onnx.yaml
+# U2-E4 slim inference API: serves models:/tweet-emotion-onnx@champion with ONNX Runtime (no torch).
+# Runs next to emotion-api; build/load the image and set its tag as in the README (section "ONNX variant").
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: api-onnx-config, namespace: mlops}
+data:
+  MODEL_URI: models:/tweet-emotion-onnx@champion
+  OMP_NUM_THREADS: "2"            # onnxruntime intra-op threads = limits.cpu (avoids CPU throttling)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: emotion-api-onnx, namespace: mlops}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: emotion-api-onnx}}
+  template:
+    metadata: {labels: {app: emotion-api-onnx}}
+    spec:
+      securityContext: {runAsUser: 1000, runAsNonRoot: true}
+      containers:
+        - name: api
+          image: ghcr.io/nsannn/mlops-nsannn/api-onnx:sha-c67c87d   # set to the built tag, never latest
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: api-onnx-config}             # MODEL_URI, OMP_NUM_THREADS
+            - secretRef: {name: mlflow-client}                  # MLFLOW_TRACKING_URI
+          startupProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 5, failureThreshold: 60}
+          readinessProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 20}
+          resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: "2", memory: 512Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: emotion-api-onnx, namespace: mlops}
+spec:
+  selector: {app: emotion-api-onnx}
+  ports: [{port: 80, targetPort: 8000}]

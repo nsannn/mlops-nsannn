@@ -1,0 +1,20 @@
+# docker/Dockerfile.api-onnx
+# U2-E4 slim inference image: ONNX Runtime + tokenizers + mlflow-skinny; no torch, no transformers, no model inside.
+# It loads models:/tweet-emotion-onnx@champion from the MLflow registry at start-up. Build from the repo root:
+#   docker build -f docker/Dockerfile.api-onnx -t <image>:sha-<commit> .
+FROM python:3.12-slim-trixie AS base
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+FROM base AS builder
+COPY requirements-api-onnx.txt .
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r requirements-api-onnx.txt
+
+FROM base AS runtime
+ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+COPY --from=builder /opt/venv /opt/venv
+COPY src/serve_onnx.py src/onnx_infer.py ./src/
+RUN useradd --uid 1000 --create-home api
+USER 1000
+EXPOSE 8000
+CMD ["uvicorn", "serve_onnx:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]

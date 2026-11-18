@@ -1,0 +1,7 @@
+# requirements-api-onnx.in  (U2-E4 slim API: no torch, no transformers)
+mlflow-skinny==3.17.0   # registry + artifact client only; 3.17 avoids CVE-2026-116692
+onnxruntime
+tokenizers
+numpy
+fastapi==0.158.1
+uvicorn

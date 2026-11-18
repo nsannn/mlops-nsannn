@@ -1,6 +1,6 @@
-# Tweet Emotion Detection — Requirements v1.6
+# Tweet Emotion Detection — Requirements v1.7
 
-Date: 2026-11-16 | Author: Nojus Sandovas
+Date: 2026-11-18 | Author: Nojus Sandovas
 
 ## 1.1 Problem description
 Create a API which can help social-media support team identify tweets and the emotions they encourage. 6 emotions will be tracked and identified (sadness, joy, love, anger, fear, surprise), build MLOps platform around it. Target: accuracy ≥ 0.85 and macro F1 ≥ 0.75 on held-out tweets,
@@ -99,6 +99,13 @@ throttling in the API pod (`OMP_NUM_THREADS=2`, one inference at a time); before
 image uses mlflow 3.17.0 (NFR-26), but the MLflow server image and the training image still contain 3.15.2, so NFR-12
 no longer holds for the training image.
 
+### 3.7 ONNX inference variant (v1.7, U2-E4)
+| ID | Category | Requirement | KPI | Measured | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| NFR-27 | Size | ONNX inference image (no torch, no transformers) | ≤ 600 MB | 415 MB (PyTorch API: 1 940 MB) | `docs/onnx-comparison.md` |
+| NFR-28 | Performance | ONNX `/predict` p95, 100 requests, 1 client, in the cluster | ≤ PyTorch p95 | 4.0 ms vs 6.6 ms | `docs/onnx-comparison.md` |
+| NFR-29 | Quality | ONNX (INT8) model vs the PyTorch source: probability parity and macro F1 | parity ≤ 1e-4, ΔF1 ≤ 0.005 | 7.2e-7, ΔF1 0.0003 | `scripts/export_onnx.py`, run `04bf43a1` |
+
 
 ## 7. Change history
 
@@ -111,4 +118,5 @@ no longer holds for the training image.
 | 1.4     | 2026-11-10 | Nojus Sandovas | Full run tracking, Optuna HPO, Model Registry with @champion: FR-05, NFR-18..19. NFR-04 target 60 s → 120 s: the tuned training process (HPO params, fuller tracking) no longer fits 60 s; measured 88 s |
 | 1.5     | 2026-11-16 | Nojus Sandovas | Training as a Kubernetes Job (ConfigMap params, Secret MLflow address) and the inference API: FR-06, NFR-20..22 (NFR-20 measured) |
 | 1.6     | 2026-11-16 | Nojus Sandovas | CI/CD with quality gate and rollback, measured inference NFRs: NFR-05, NFR-06, NFR-21, NFR-22 measured; new NFR-23..26; mlflow CVE noted as a known risk |
+| 1.7     | 2026-11-18 | Nojus Sandovas | U2-E4 ONNX variant (INT8, slim image without torch, `tweet-emotion-onnx@champion`): NFR-27..29 measured |
 
