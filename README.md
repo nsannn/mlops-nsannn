@@ -240,7 +240,8 @@ The run appears in MLflow with the tag `runner=k8s-job` (measured: `Completed` i
 
 FastAPI service (`src/serve.py`, image `docker/Dockerfile.api`). At start-up it resolves
 `models:/tweet-emotion@champion` to a version and downloads that model from MLflow; the image contains no model.
-Deployment + Service in `k8s/api.yaml` (`ClusterIP`; reached through a port-forward).
+Deployment + Service in `k8s/base/api.yaml` (`ClusterIP`; reached through a port-forward), applied by Argo CD
+(section 12).
 
 ```bash
 kubectl port-forward -n mlops svc/emotion-api 8000:80        # keep running in its own terminal
@@ -266,15 +267,16 @@ runners and never connects to the cluster:
 | --- | --- | --- |
 | `lint` → `test` | yes | `ruff check .`, `pytest` |
 | `model-gate` | yes | data from the pinned HF revision (md5 checked against DVC) → `dvc repro` → gate |
-| `build-push` | no | API image → Trivy (blocks CRITICAL) → GHCR `sha-<commit>` → bot commit of the tag to `k8s/api.yaml` |
+| `build-push` | no | API image → Trivy (blocks CRITICAL) → GHCR `sha-<commit>` → bot commit of the tag to `k8s/base/api.yaml` |
 
 The **quality gate** is set in `params.yaml` (`gate: metric: f1, threshold: 0.80`) and checked by
 `scripts/check_model_gate.py` (exit 1 stops the pipeline). Changing the threshold retrains nothing.
 
-**Deploy** (the step Argo CD would automate) brings the cluster to the Git state:
+**Deploy:** Argo CD applies the bumped manifest by itself (section 12). The registry half of a deployment, which Argo CD
+can't see, stays a script:
 
 ```bash
-git pull && ./scripts/deploy.sh   # gate -> register @candidate -> promote @champion -> kubectl apply -> restart -> smoke test
+git pull && ./scripts/deploy.sh   # gate -> register @candidate -> promote @champion -> wait for Argo CD sync -> restart -> smoke test
 ```
 
 **Rollback** of the model (measured 17 s):
@@ -306,8 +308,8 @@ docker build -f docker/Dockerfile.api-onnx -t ghcr.io/nsannn/mlops-nsannn/api-on
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.1 image \
   --severity CRITICAL --ignore-unfixed --exit-code 1 ghcr.io/nsannn/mlops-nsannn/api-onnx:$TAG
 kind load docker-image ghcr.io/nsannn/mlops-nsannn/api-onnx:$TAG --name mlops
-sed -i "s|api-onnx:sha-[0-9a-f]*|api-onnx:$TAG|" k8s/api-onnx.yaml
-kubectl apply -f k8s/api-onnx.yaml && kubectl rollout status deployment/emotion-api-onnx -n mlops
+sed -i "s|api-onnx:sha-[0-9a-f]*|api-onnx:$TAG|" k8s/base/api-onnx.yaml
+# commit + push the new tag: Argo CD (section 12) rolls emotion-api-onnx out
 
 kubectl port-forward -n mlops svc/emotion-api-onnx 8001:80      # own terminal
 python scripts/load_test.py --url http://localhost:8001/predict --n 100 --concurrency 1

@@ -1,0 +1,17 @@
+# deploy/argocd/application.yaml
+# Argo CD keeps the inference APIs equal to Git: auto-sync, prune, self-heal.
+# Apply once after the base/overlay layout is on GitHub: kubectl apply -f deploy/argocd/application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: emotion-api, namespace: argocd}
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nsannn/mlops-nsannn.git    # public repo: no credentials needed
+    targetRevision: main
+    path: deploy/overlays/production                       # only the APIs, not the whole k8s/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}

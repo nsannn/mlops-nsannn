@@ -1,12 +1,12 @@
 # .github/workflows/ml-pipeline.yml
 # CI: lint -> test -> model-gate (dvc repro + gate) -> build-push (image + manifest bump).
-# CI never connects to the cluster: the new image tag goes to Git and scripts/deploy.sh applies it.
+# CI never connects to the cluster: the new image tag goes to Git and Argo CD in the cluster syncs it.
 name: ml-pipeline
 
 on:
   push:
     branches: [main]
-    paths-ignore: ["k8s/**", "docs/**", "**.md"]   # bump commits, reverts and doc edits don't retrigger
+    paths-ignore: ["k8s/**", "deploy/**", "docs/**", "**.md"]   # bump commits, reverts and doc edits don't retrigger
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -85,10 +85,10 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
       - name: Update the manifest in Git
         run: |
-          sed -i "s|image: ghcr.io/.*/api:.*|image: $API_IMAGE:$TAG|" k8s/api.yaml
+          sed -i "s|image: ghcr.io/.*/api:.*|image: $API_IMAGE:$TAG|" k8s/base/api.yaml
           F1=$(python3 -c "import json; print(round(json.load(open('metrics.json'))['f1'], 4))")
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add k8s/api.yaml
+          git add k8s/base/api.yaml
           git diff --staged --quiet || git commit -m "ci: bump api to $TAG (gate f1=$F1)"
           git push

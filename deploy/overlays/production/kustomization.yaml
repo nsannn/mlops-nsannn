@@ -1,0 +1,6 @@
+# deploy/overlays/production/kustomization.yaml
+# What Argo CD applies (deploy/argocd/application.yaml): the API base in namespace mlops.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mlops
+resources: [../../../k8s/base]

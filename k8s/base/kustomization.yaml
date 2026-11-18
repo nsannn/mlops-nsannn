@@ -1,0 +1,5 @@
+# k8s/base/kustomization.yaml
+# The resources Argo CD manages: both inference APIs (not MLflow, PostgreSQL, the training Job or the kind config).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [api.yaml, api-onnx.yaml]

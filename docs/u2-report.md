@@ -13,8 +13,9 @@ connects to the cluster; the cluster follows Git:
 
 ```text
 commit ──► GitHub Actions: lint → test → model-gate (data from pinned HF + md5 check, dvc repro, F1 ≥ 0.80)
-                           → build-push (API image, Trivy, GHCR sha-<commit>, bot commit of the tag to k8s/api.yaml)
-laptop ──► git pull && scripts/deploy.sh: gate → register @candidate → promote @champion → kubectl apply → restart
+                           → build-push (API image, Trivy, GHCR sha-<commit>, bot commit of the tag to k8s/base/api.yaml)
+argocd ──► in the cluster: polls main, applies deploy/overlays/production (both APIs), self-heals drift (U2-E5)
+laptop ──► git pull && scripts/deploy.sh: gate → register @candidate → promote @champion → wait for sync → restart
 cluster ─► emotion-api pod: resolves models:/tweet-emotion@champion at start-up, loads that version from MLflow
 ```
 
@@ -35,7 +36,7 @@ cluster ─► emotion-api pod: resolves models:/tweet-emotion@champion at start
   address from Secret `mlflow-client` (created by a command, not in Git). It finished `Completed` in 104 s; the run is
   tagged `runner=k8s-job` and has the same F1 as on the laptop.
 * **U2-R4:** FastAPI (`src/serve.py`, `docker/Dockerfile.api`, 1 940 MB, non-root) with `/health` and `/predict`,
-  Deployment + Service in `k8s/api.yaml`. Load test of 100 requests in the cluster (`docs/load-test.md`):
+  Deployment + Service in `k8s/base/api.yaml`. Load test of 100 requests in the cluster (`docs/load-test.md`):
 
   | NFR | What | Target | Measured |
   | --- | --- | --- | --- |
@@ -47,7 +48,7 @@ cluster ─► emotion-api pod: resolves models:/tweet-emotion@champion at start
 * **U2-R5:** `.github/workflows/ml-pipeline.yml`: `ruff`, 8 `pytest` unit tests (gate rules, API contract with a fake
   model), API image build, Trivy (blocks CRITICAL) and push to GHCR as `sha-<commit>`.
 * **U2-R6:** The `model-gate` job reruns `dvc repro` and checks macro F1 ≥ 0.80 from `params.yaml`; only then is the
-  image built and the new tag committed to `k8s/api.yaml`. 5 green runs took 7 min 56 s – 9 min 56 s (NFR-24).
+  image built and the new tag committed to `k8s/base/api.yaml`. 5 green runs took 7 min 56 s – 9 min 56 s (NFR-24).
   * **Red run #6** ([link](https://github.com/nsannn/mlops-nsannn/actions/runs/43957276366)): `learning_rate` 1e-6,
     1 epoch → `FAIL: f1=0.0842 < 0.8`, `build-push` skipped. No image tag, no bump commit, nothing registered,
     `/health` still v2, and `deploy.sh` refused. Reverted with `git revert` (run #7 green).

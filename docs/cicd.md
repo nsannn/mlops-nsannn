@@ -2,15 +2,17 @@
 ## Pipeline
 
 
-Never connects to the cluster (GitHub can't reach the local kind cluster or its MLflow). The cluster is
-brought to the Git state by `scripts/deploy.sh`
+Never connects to the cluster (GitHub can't reach the local kind cluster or its MLflow). Since U2-E5 the cluster
+is brought to the Git state by Argo CD, which runs inside it and pulls from GitHub (`docs/argocd.md`); before that,
+`scripts/deploy.sh` ran `kubectl apply` (runs #2–#7 below).
 
 | Job | Runs on | Pull request | Push to `main` |
 | --- | --- | --- | --- |
 | `lint` → `test` | GitHub | yes | `ruff check .`, `pytest` (8 tests, fake model) |
 | `model-gate` | GitHub | yes | `fetch_data.py` (pinned HF revision) → md5 check against `dataset.parquet.dvc` → `dvc repro` → `check_model_gate.py` (macro F1 ≥ 0.80 from `params.yaml`) |
-| `build-push` | GitHub | no | API image → Trivy (fail on CRITICAL) → GHCR `sha-<commit>` → bot commit of the tag to `k8s/api.yaml` |
-| `deploy.sh` | laptop, after `git pull` | – | gate on local `metrics.json` → `registry.py register` (@candidate) → `promote` (@champion, old → @previous) → `kubectl apply` → `rollout restart` → smoke test |
+| `build-push` | GitHub | no | API image → Trivy (fail on CRITICAL) → GHCR `sha-<commit>` → bot commit of the tag to `k8s/base/api.yaml` (`k8s/api.yaml` before U2-E5) |
+| Argo CD | cluster | – | polls `main` (~3 min), applies `deploy/overlays/production` (both APIs), self-heals drift |
+| `deploy.sh` | laptop, after `git pull` | – | gate on local `metrics.json` → `registry.py register` (@candidate) → `promote` (@champion, old → @previous) → wait for the Argo CD sync → `rollout restart` → smoke test |
 
 Each job `needs` the previous one, so a red gate skips everything after it: no image, no bump commit,
 nothing to deploy. CI's MLflow is a throwaway SQLite file; the served model is trained against the cluster
